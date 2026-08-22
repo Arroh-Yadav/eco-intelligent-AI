@@ -13,7 +13,31 @@ import os
 import requests
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = "llama-3.1-8b-instant"  # fast + free-tier friendly
+GROQ_MODELS_URL = "https://api.groq.com/openai/v1/models"
+GROQ_MODEL = "openai/gpt-oss-20b"  # current Groq production model as of Aug 2026 (fast + cheap)
+
+
+def _get_working_model(api_key: str) -> str:
+    """Returns GROQ_MODEL if likely valid, otherwise asks Groq for any
+    currently active model so a future deprecation doesn't break the demo."""
+    try:
+        resp = requests.get(
+            GROQ_MODELS_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        available_ids = {m["id"] for m in resp.json().get("data", [])}
+        if GROQ_MODEL in available_ids:
+            return GROQ_MODEL
+        # Prefer any gpt-oss or llama chat model over audio/guard/tts models
+        for candidate in available_ids:
+            if "gpt-oss" in candidate or "llama" in candidate.lower():
+                if "guard" not in candidate and "whisper" not in candidate:
+                    return candidate
+        return GROQ_MODEL  # fall through, let the actual call surface the error
+    except Exception:
+        return GROQ_MODEL
 
 
 def _fallback_insight(building: str, usage: float, baseline: float, timestamp: str) -> str:
@@ -42,17 +66,25 @@ def get_insight(building: str, usage: float, baseline: float, timestamp: str) ->
     )
 
     try:
+        model_to_use = _get_working_model(api_key)
         response = requests.post(
             GROQ_API_URL,
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
-                "model": GROQ_MODEL,
+                "model": model_to_use,
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 150,
                 "temperature": 0.4,
             },
             timeout=15,
         )
+        if response.status_code == 404:
+            return (
+                _fallback_insight(building, usage, baseline, timestamp)
+                + f"\n\n(AI model '{model_to_use}' not found on Groq — check "
+                "https://console.groq.com/docs/models for current model IDs "
+                "and update GROQ_MODEL in ai_insights.py)"
+            )
         response.raise_for_status()
         data = response.json()
         return data["choices"][0]["message"]["content"].strip()
