@@ -8,6 +8,7 @@ Run: python data_generator.py
 Output: data/energy_usage.csv
 """
 
+import os
 import numpy as np
 import pandas as pd
 
@@ -75,6 +76,7 @@ def main():
     result = pd.concat(all_data, ignore_index=True)
     result["usage_kwh"] = result["usage_kwh"].round(2)
 
+    os.makedirs("data", exist_ok=True)
     result.to_csv("data/energy_usage.csv", index=False)
     print(f"Generated {len(result)} rows across {len(BUILDINGS)} buildings -> data/energy_usage.csv")
 
