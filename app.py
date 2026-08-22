@@ -8,6 +8,7 @@ Run:
 
 import os
 import subprocess
+import sys
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -28,7 +29,10 @@ CO2_KG_PER_KWH = 0.71  # approx grid emission factor, adjust for your region
 @st.cache_data
 def ensure_data():
     if not os.path.exists(DATA_PATH):
-        subprocess.run(["python", "data_generator.py"], check=True)
+        result = subprocess.run([sys.executable, "data_generator.py"], capture_output=True, text=True)
+        if result.returncode != 0:
+            st.error(f"Failed to generate demo data:\n\n```\n{result.stderr}\n```")
+            st.stop()
     return load_data(DATA_PATH)
 
 
