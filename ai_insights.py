@@ -30,11 +30,12 @@ def _get_working_model(api_key: str) -> str:
         available_ids = {m["id"] for m in resp.json().get("data", [])}
         if GROQ_MODEL in available_ids:
             return GROQ_MODEL
-        # Prefer any gpt-oss or llama chat model over audio/guard/tts models
-        for candidate in available_ids:
-            if "gpt-oss" in candidate or "llama" in candidate.lower():
-                if "guard" not in candidate and "whisper" not in candidate:
-                    return candidate
+        # Prefer any gpt-oss or llama chat model over audio/guard/tts models.
+        # Sort for deterministic behavior (a Python set has no stable order).
+        for candidate in sorted(available_ids):
+            if ("gpt-oss" in candidate or "llama" in candidate.lower()) and \
+               "guard" not in candidate and "whisper" not in candidate:
+                return candidate
         return GROQ_MODEL  # fall through, let the actual call surface the error
     except Exception:
         return GROQ_MODEL
@@ -73,10 +74,11 @@ def get_insight(building: str, usage: float, baseline: float, timestamp: str) ->
             json={
                 "model": model_to_use,
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 150,
+                "max_completion_tokens": 400,  # reasoning models spend tokens "thinking" before answering
+                "reasoning_effort": "low",     # keep reasoning short so tokens are left for the actual answer
                 "temperature": 0.4,
             },
-            timeout=15,
+            timeout=20,
         )
         if response.status_code == 404:
             return (
@@ -87,6 +89,15 @@ def get_insight(building: str, usage: float, baseline: float, timestamp: str) ->
             )
         response.raise_for_status()
         data = response.json()
-        return data["choices"][0]["message"]["content"].strip()
+        content = data["choices"][0]["message"]["content"].strip()
+
+        if not content:
+            return (
+                _fallback_insight(building, usage, baseline, timestamp)
+                + "\n\n(AI returned an empty response this time — this can happen "
+                "with reasoning models under load. Try again, or rely on this "
+                "template-based insight for the demo.)"
+            )
+        return content
     except Exception as exc:  # noqa: BLE001 - want graceful fallback for any API issue
         return _fallback_insight(building, usage, baseline, timestamp) + f"\n\n(AI API unavailable: {exc})"
