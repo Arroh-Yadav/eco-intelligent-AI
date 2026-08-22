@@ -4,5 +4,6 @@ __pycache__/
 venv/
 .env
 data/
+bdg2_raw/
 .streamlit/secrets.toml
 .DS_Store
