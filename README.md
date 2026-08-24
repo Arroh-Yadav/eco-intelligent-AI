@@ -15,7 +15,7 @@ ASHRAE's Great Energy Predictor competition. Not a toy demo.
 
 ## Live demo
 
-🔗 **[Add your Streamlit Community Cloud URL here once deployed]**
+🔗 **[(https://eco-intelligent-ai-kanrdz6vkpkyfgni5kxpje.streamlit.app/)]**
 
 ## How it works
 
