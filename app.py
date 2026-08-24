@@ -20,6 +20,12 @@ from forecast import get_building_analysis, load_data
 
 load_dotenv()
 
+# Make Streamlit Cloud secrets (st.secrets) available the same way as a
+# local .env file, so ai_insights.py's os.environ.get() lookup works
+# identically in both environments.
+if "GROQ_API_KEY" in st.secrets and not os.environ.get("GROQ_API_KEY"):
+    os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+
 st.set_page_config(page_title="Eco-Intelligent AI", page_icon="🌱", layout="wide")
 
 DATA_PATH = "data/energy_usage.csv"
@@ -29,9 +35,15 @@ CO2_KG_PER_KWH = 0.71  # approx grid emission factor, adjust for your region
 @st.cache_data
 def ensure_data():
     if not os.path.exists(DATA_PATH):
-        result = subprocess.run([sys.executable, "data_generator.py"], capture_output=True, text=True)
+        result = subprocess.run(
+            [sys.executable, "data_generator.py"],
+            capture_output=True, text=True,
+        )
         if result.returncode != 0:
-            st.error(f"Failed to generate demo data:\n\n```\n{result.stderr}\n```")
+            st.error(
+                "Failed to generate demo data. Real error from data_generator.py:\n\n"
+                f"```\n{result.stderr}\n```"
+            )
             st.stop()
     return load_data(DATA_PATH)
 
@@ -48,6 +60,12 @@ def render_sidebar(buildings):
     st.sidebar.header("Controls")
     building = st.sidebar.selectbox("Select Building", buildings)
     st.sidebar.markdown("---")
+
+    if os.environ.get("GROQ_API_KEY"):
+        st.sidebar.success("🟢 AI Insights: LIVE (Groq key detected)")
+    else:
+        st.sidebar.warning("🟡 AI Insights: Fallback mode (no GROQ_API_KEY found)")
+
     st.sidebar.markdown(
         "**AI Insights**: powered by Groq's free API. "
         "Set `GROQ_API_KEY` in a `.env` file to enable live AI explanations "
